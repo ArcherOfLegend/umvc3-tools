@@ -47,7 +47,13 @@ class BlenderCustomAttributeSetProxy(EditorCustomAttributeSetProxy):
         super().__init__(attribs)
 
     def getCustomAttribute(self, name: str) -> Any:
-        return self._ctx[name]
+        try:
+            return self._ctx[name]
+        except KeyError:
+            getter = getattr(self._ctx, "get", None)
+            if callable(getter):
+                return getter(name, None)
+            return None
 
     def setCustomAttribute(self, name: str, value: Any):
         self._ctx[name] = value
