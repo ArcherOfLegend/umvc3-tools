@@ -48,6 +48,7 @@ class ModelImporterBase(ABC):
         self.editorGroupArray = []
         self.editorGroupLookup = dict()
         self.layer = None
+        self._jointWorldMtxCache = dict()
 
     # Shared functions
     def decodeInputToPoint3( self, inputInfo, vertexStream ):
@@ -407,6 +408,7 @@ class ModelImporterBase(ABC):
         self.basePath = os.path.dirname( modFilePath )
         self.metadata = self.loadMetadata( self.config.importMetadataPath )
         self.model = self.loadModel( self.filePath )
+        self._jointWorldMtxCache = dict()
         self.calcMatrices()
 
         if self.config.importCreateLayer:
@@ -447,8 +449,23 @@ class ModelImporterBase(ABC):
         attribs.bsphere = group.boundingSphere
         attribs.index = str( self.model.groups.index( group ) )
 
+    def _getJointWorldMatrix(self, jointIndex: int):
+        if jointIndex in self._jointWorldMtxCache:
+            return self._jointWorldMtxCache[jointIndex]
+
+        worldMtx = self.model.jointLocalMtx[jointIndex]
+        joint = self.model.joints[jointIndex]
+        if joint.parentIndex != 255:
+            parentWorldMtx = self._getJointWorldMatrix(joint.parentIndex)
+            worldMtx = nclMultiply(worldMtx, parentWorldMtx)
+
+        self._jointWorldMtxCache[jointIndex] = worldMtx
+        return worldMtx
+
     def setJointCustomAttributes(self, joint, editorBone ):
         attribs = self.createJointCustomAttribute( editorBone )
+        jointIndex = self.model.joints.index( joint )
+
         attribs.id = joint.id
         attribs.parentIndex = str(joint.parentIndex)
         attribs.symmetryIndex = str(joint.symmetryIndex)
@@ -456,10 +473,16 @@ class ModelImporterBase(ABC):
         attribs.field03 = joint.field03
         attribs.field04 = joint.field04
         attribs.length = str(joint.length)
-        attribs.offsetX = str(joint.offset[0])
-        attribs.offsetY = str(joint.offset[1])
-        attribs.offsetZ = str(joint.offset[2])
-        attribs.index = str( self.model.joints.index( joint ) )
+
+        offset = joint.offset
+        if self.model.jointLocalMtx is not None and jointIndex < len(self.model.jointLocalMtx):
+            worldMtx = self._getJointWorldMatrix(jointIndex)
+            offset = NclVec3((worldMtx[3][0], worldMtx[3][1], worldMtx[3][2]))
+
+        attribs.offsetX = str(offset[0])
+        attribs.offsetY = str(offset[1])
+        attribs.offsetZ = str(offset[2])
+        attribs.index = str(jointIndex)
 
     def setMaterialCustomAttributes(self, editorMaterial, material: imMaterialInfo):
         attribs = self.createMaterialCustomAttribute( editorMaterial )
