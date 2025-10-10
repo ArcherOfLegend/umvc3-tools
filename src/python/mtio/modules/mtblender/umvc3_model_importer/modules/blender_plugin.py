@@ -74,13 +74,20 @@ class BlenderNodeProxy(EditorNodeProxy):
         return convertMatrix3ToNclMat44(self.node.matrix_local)
 
     def getParent(self):
-        return BlenderNodeProxy(self.node.parent)
+        if self.node is None:
+            return None
+        parent = getattr(self.node, 'parent', None)
+        if parent is None:
+            return None
+        return BlenderNodeProxy(parent)
 
     def getName(self):
         return self.node.name
 
     def isHidden(self):
         #Has to be rewritten to disambiguate between bones and not bones.
+        if self.node is None:
+            return True
         if isinstance(self.node, bpy_types.Bone):
             return self.node.hide
         #Below is required for groups
@@ -97,13 +104,10 @@ class BlenderNodeProxy(EditorNodeProxy):
             return self.node.hide
 
     def isMeshNode(self):
-        return isinstance(self.node.data, bpy_types.Mesh)
+        return hasattr(self.node, 'data') and isinstance(self.node.data, bpy_types.Mesh)
 
     def isGroupNode(self):
-        if self.node.type == 'EMPTY': #This is the primary difference in the node type I found.
-            return True
-        else:
-            return False
+        return hasattr(self.node, 'type') and self.node.type == 'EMPTY'
 
     def isBoneNode(self):
         #return isinstance(self.node.data, bpy_types.Bone)

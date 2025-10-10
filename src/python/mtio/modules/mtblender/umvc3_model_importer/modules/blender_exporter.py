@@ -24,23 +24,26 @@ class BlenderModelExporter(ModelExporterBase):
         temp = list(bpy.data.objects)
         objects = []
         for o in temp:
-            if not o in self.processedNodes:
-                objects.append( BlenderNodeProxy( o ) )
+            proxy = BlenderNodeProxy( o )
+            if proxy not in self.processedNodes:
+                objects.append( proxy )
         return objects
 
     #Based on the above method to ensure that we get joints as they are not included in bpy.data.objects.
     def getObjectBones( self ):
-        temp = list(bpy.data.objects)
-        objects = []
-        for o in temp:
-            if not o in self.processedNodes:
-                #Ensures we only get the bones from the Armature selected and adds all of them.
-                if o.type == 'ARMATURE' and o.name == bpy.context.selected_objects[0].name:
-                    # for ChildNode in enumerate(bpy.data.armatures[o.name].bones):
-                    for ChildNode in bpy.data.armatures[o.name].bones:
-                        #o.node = ChildNode
-                        objects.append( BlenderNodeProxy( ChildNode ) )
+        armature_objects = []
+        if bpy.context.selected_objects:
+            armature_objects = [obj for obj in bpy.context.selected_objects if obj.type == 'ARMATURE']
+        if not armature_objects:
+            armature_objects = [obj for obj in bpy.data.objects if obj.type == 'ARMATURE']
 
+        objects = []
+        for armature in armature_objects:
+            for bone in armature.data.bones:
+                proxy = BlenderNodeProxy( bone )
+                if proxy in self.processedNodes:
+                    continue
+                objects.append( proxy )
 
         return objects
 
