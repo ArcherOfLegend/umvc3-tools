@@ -26,6 +26,17 @@ class DecodedVertexData:
     uvExtendArray: EditorArrayProxy
     weightArray: EditorArrayProxy
     jointArray: EditorArrayProxy
+    colorArray: EditorArrayProxy
+<<<<<<< Updated upstream
+=======
+    # per vertex occlusion, the 4th component of the normal (or the separate Occlusion
+    # input on TB layouts), decoded the same way the vertex shader reads it. The pixel
+    # shaders multiply the lit diffuse by it, so it's baked AO, not padding.
+    occlusionArray: list = None
+    # game tangents (x, y, z, sign), transformed like the normals. Blender works out its own
+    # tangent frame from the uvs; these let the two be compared / used directly.
+    tangentArray: list = None
+>>>>>>> Stashed changes
 
 @dataclass
 class PreprocessedWeightData:
@@ -110,15 +121,29 @@ class ModelImporterBase(ABC):
         editorUVExtendArray = self.createArray()
         editorWeightArray = self.createArray()
         editorJointArray = self.createArray()
+        editorColorArray = self.createArray()
+<<<<<<< Updated upstream
+=======
+        occlusionArray = []
+        tangentArray = []
+>>>>>>> Stashed changes
 
         self.logger.debug( 'decoding vertices' )
-        vertexBufferStart = primitive.vertexBufferOffset + (primitive.vertexStartIndex * primitive.vertexStride)
+        # vertexBufferOffset + (indexStartIndex + vertexStartIndex) * stride equals the running byte total
+        vertexBufferStart = primitive.vertexBufferOffset + \
+            ( ( primitive.indexStartIndex + primitive.vertexStartIndex ) * primitive.vertexStride )
         for j in range( 0, primitive.vertexCount ):
             vertexStart = vertexBufferStart + ( j * primitive.vertexStride )
             
             # decode each vertex input
             editorVtxWeightArray = None
             editorVtxJointArray = None
+            vtxColor = None
+            vtxAlpha = None
+<<<<<<< Updated upstream
+=======
+            vtxOcclusion = None
+>>>>>>> Stashed changes
             for key, value in shaderInfo.inputsByName.items():
                 for inputInfo in value:
                     vertexStream.setOffset( vertexStart + inputInfo.offset )
@@ -129,10 +154,22 @@ class ModelImporterBase(ABC):
                             pos = nclTransform(pos, self.modelMtx )
                         editorVertexArray.append( self.convertNclVec3ToPoint3( pos ) )
                     elif key == 'Normal':
+                        if inputInfo.type == 11:
+                            # packed x8y8z8w8, w is the occlusion
+                            vtxOcclusion = vertexcodec.decodeVertexComponent( inputInfo.type, vertexStream )[3]
+                            vertexStream.setOffset( vertexStart + inputInfo.offset )
                         nrm = self.decodeInputToPoint3( inputInfo, vertexStream )
                         if not self.config.debugDisableTransform:
                             nrm = nclNormalize( nclTransform( nrm, self.modelMtxNormal ) )
                         editorNormalArray.append( self.convertNclVec3ToPoint3( nrm ) )
+                    elif key == 'Occlusion':
+                        vtxOcclusion = float( vertexcodec.decodeVertexComponent( inputInfo.type, vertexStream )[0] )
+                    elif key == 'Tangent' and inputInfo.componentCount == 4 and inputInfo.type != 11:
+                        t = [ float( vertexcodec.decodeVertexComponent( inputInfo.type, vertexStream )[0] ) for _ in range( 4 ) ]
+                        tv = NclVec3( ( t[0], t[1], t[2] ) )
+                        if not self.config.debugDisableTransform:
+                            tv = nclNormalize( nclTransform( tv, self.modelMtxNormal ) )
+                        tangentArray.append( ( tv[0], tv[1], tv[2], t[3] ) )
                     elif key == 'Joint':
                         if editorVtxJointArray == None:
                             editorVtxJointArray = self.createArray()
@@ -147,9 +184,26 @@ class ModelImporterBase(ABC):
                         editorUVSecondaryArray.append( self.convertNclVec3ToPoint3( self.decodeInputToUV( inputInfo, vertexStream ) ) )
                     elif key == 'UV_Unique':
                         editorUVUniqueArray.append( self.convertNclVec3ToPoint3( self.decodeInputToUV( inputInfo, vertexStream ) ) )
+                    elif key == 'VertexColor':
+                        # stored 0..255 per channel
+                        vtxColor = [ float( vertexcodec.decodeVertexComponent( inputInfo.type, vertexStream )[0] )
+                                     for _ in range( inputInfo.componentCount ) ]
+                    elif key == 'VertexAlpha':
+                        vtxAlpha = float( vertexcodec.decodeVertexComponent( inputInfo.type, vertexStream )[0] )
                     elif key == 'UV_Extend':
                         editorUVExtendArray.append( self.convertNclVec3ToPoint3( self.decodeInputToUV( inputInfo, vertexStream ) ) )
                         
+            if vtxColor != None or vtxAlpha != None:
+                c = vtxColor if vtxColor != None else [127.0, 127.0, 127.0]
+                a = vtxAlpha if vtxAlpha != None else 1.0
+                editorColorArray.append( ( c[0]/255.0, c[1]/255.0, c[2]/255.0, a ) )
+
+<<<<<<< Updated upstream
+=======
+            if vtxOcclusion != None:
+                occlusionArray.append( float( vtxOcclusion ) )
+
+>>>>>>> Stashed changes
             if editorVtxWeightArray != None:
                 editorWeightArray.append( editorVtxWeightArray )
             if editorVtxJointArray != None:
@@ -163,13 +217,20 @@ class ModelImporterBase(ABC):
             editorUVUniqueArray,
             editorUVExtendArray,
             editorWeightArray,
-            editorJointArray
+            editorJointArray,
+<<<<<<< Updated upstream
+            editorColorArray
+=======
+            editorColorArray,
+            occlusionArray,
+            tangentArray
+>>>>>>> Stashed changes
         )
             
     def decodeFaces( self, primitive: rModelPrimitive, indexStream: NclBitStream ) -> EditorArrayProxy:
         self.logger.debug( 'decoding faces')
         editorFaceArray = self.createArray()
-        indexStart = ( primitive.indexBufferOffset + primitive.indexStartIndex ) * 2
+        indexStart = primitive.indexBufferOffset * 2
         indexStream.setOffset( indexStart )
         if not target.current.useTriStrips:   
             for j in range( 0, primitive.indexCount, 3 ):
@@ -228,8 +289,23 @@ class ModelImporterBase(ABC):
                     self.logger.exception( e )
                     return None
                         
-                return self.createTexture( textureDDSPath )
+                image = self.createTexture( textureDDSPath )
+                fmt = texture.header.fmt.surfaceFmt
+                # BM_HQ (42) on mvc3 pc is YUV packed into DXT5, the game decodes it in the
+                # shader. Decode it here so blender shows real colours.
+                if fmt == rTextureSurfaceFmt.BM_HQ and not target.current.BM_HQ_BC7:
+                    image = self.decodeYUVTexture( image, textureDDSPath )
+                self.tagTextureFormat( image, fmt, textureTEXPath )
+                return image
             return None
+
+    def decodeYUVTexture( self, image, ddsPath ):
+        '''Editor specific, returns the image unchanged by default.'''
+        return image
+
+    def tagTextureFormat( self, image, fmt, texPath ):
+        '''Editor specific. Remembers the source .tex format so export can keep it.'''
+        pass
 
     def loadMetadata( self, path ):
         metadata = ModelMetadata()
@@ -349,6 +425,7 @@ class ModelImporterBase(ABC):
         # load mtl
         mtl = imMaterialLib()
         mrlName, _ = util.getExtractedResourceFilePath( self.basePath + '/' + self.baseName, '2749c8a8', 'mrl' )
+        self.mrlPath = mrlName if ( mrlName != None and os.path.exists( mrlName ) ) else ''
         if mrlName != None and os.path.exists( mrlName ):
             self.logger.info(f'loading mrl file from {mrlName}')
             mtl.loadBinaryStream(NclBitStream(util.loadIntoByteArray(mrlName)))
@@ -444,6 +521,11 @@ class ModelImporterBase(ABC):
         self.importEnvelopes() 
         if mip.import_meshes:
             self.importPrimitives(context)
+
+        if mip.bones_in_front:
+            filler = ''
+            self.armatureObj.show_in_front = mip.bones_in_front
+            #Thingy.
         
         if not self.plugin.isDebugEnv():
             self.plugin.enableSceneRedraw()
@@ -489,6 +571,56 @@ class ModelImporterBase(ABC):
         attribs.rasterizerState = material.rasterizerState
         attribs.cmdListFlags = hex( material.cmdListFlags )
         attribs.matFlags = hex( material.matFlags )
+        # needed on export to tell an alpha material from an opaque one; the rest of
+        # the mrl is surfaced as nodes in the shader editor instead of as properties
+        attribs.blendState = material.blendState
+
+        try:
+            self.setMaterialCommandAttributes( editorMaterial, material )
+        except Exception as e:
+            self.logger.debug( 'could not mirror mrl commands: ' + str( e ) )
+
+    def setMaterialCommandAttributes( self, editorMaterial, material: imMaterialInfo ):
+        '''Mirror the rest of the mrl entry onto the material as custom properties.
+        The numbers that drive shading are inputs on the MT Character group instead;
+        this is the reference copy, so nothing in the file is lost on import.
+
+            tex_<slot>   texture path
+            flag_<name>  feature flag value
+            cb_<name>    constant buffer
+            smp_<name>   sampler state
+        '''
+        target = editorMaterial.unwrap() if hasattr( editorMaterial, 'unwrap' ) else editorMaterial
+        if target is None:
+            return
+
+        prefixes = { 'texture': 'tex_', 'flag': 'flag_', 'cbuffer': 'cb_',
+                     'samplerstate': 'smp_' }
+        for cmd in material.cmds:
+            prefix = prefixes.get( cmd.type )
+            if prefix is None:
+                continue
+            key = prefix + str( cmd.name )
+            data = cmd.data
+            try:
+                if isinstance( data, ( list, tuple ) ):
+                    target[ key ] = [ float( x ) for x in data ]
+                elif isinstance( data, ( int, float ) ):
+                    target[ key ] = data
+                else:
+                    target[ key ] = str( data )
+            except Exception:
+                target[ key ] = str( data )
+
+        # animData is binary, so record what is readable rather than dumping bytes
+        if material.animData:
+            target['animData_bytes'] = len( material.animData )
+            anim = material.getUVAnimation()
+            if anim is not None:
+                target['animData_channel'] = anim['channel']
+                target['animData_scrollU'] = float( anim['direction'][0] )
+                target['animData_scrollV'] = float( anim['direction'][1] )
+                target['animData_rate']    = int( anim['rate'] )
 
     def setPrimitiveCustomAttributes( self, primitive, shaderInfo, editorMesh, envelopeIndex ):
         attribs = self.createPrimitiveCustomAttribute( editorMesh )

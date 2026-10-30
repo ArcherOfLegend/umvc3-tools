@@ -48,6 +48,12 @@ class imCacheVertex:
         self.uvExtend = ()
         self.weights = ()
         self.weightIndices = ()
+        self.color = ()
+        self.alpha = ()
+<<<<<<< Updated upstream
+=======
+        self.occlusion = ()
+>>>>>>> Stashed changes
         
     def __eq__(self, o: object) -> bool:
         if isinstance( o, imCacheVertex ):
@@ -59,10 +65,20 @@ class imCacheVertex:
                    self.uvUnique == o.uvUnique and \
                    self.uvExtend == o.uvExtend and \
                    self.weights == o.weights and \
-                   self.weightIndices == o.weightIndices
+                   self.weightIndices == o.weightIndices and \
+                   self.color == o.color and \
+<<<<<<< Updated upstream
+                   self.alpha == o.alpha
                    
     def __hash__( self ):
-        return hash((self.position, self.normal, self.tangent, self.uvPrimary, self.uvSecondary, self.uvUnique, self.uvExtend, self.weights, self.weightIndices))
+        return hash((self.position, self.normal, self.tangent, self.uvPrimary, self.uvSecondary, self.uvUnique, self.uvExtend, self.weights, self.weightIndices, self.color, self.alpha))
+=======
+                   self.alpha == o.alpha and \
+                   self.occlusion == o.occlusion
+                   
+    def __hash__( self ):
+        return hash((self.position, self.normal, self.tangent, self.uvPrimary, self.uvSecondary, self.uvUnique, self.uvExtend, self.weights, self.weightIndices, self.color, self.alpha, self.occlusion))
+>>>>>>> Stashed changes
     
 '''
 typedef struct {
@@ -100,6 +116,10 @@ class imVertex(object):
         self.uvSecondary = NclVec2()
         self.uvUnique = NclVec2()
         self.uvExtend = NclVec2()
+        # stage formats carry baked per vertex colour and alpha. 127 is the neutral
+        # midpoint the game uses, not 255.
+        self.color = NclVec3((127,127,127))
+        self.alpha = 1.0
         
     def getFlags( self ):
         raise NotImplementedError()
@@ -324,7 +344,7 @@ class imVertexIANonSkinB(imVertex):
         stream.writeFloat( vertexcodec.encodeF32( self.position[0] ) )
         stream.writeFloat( vertexcodec.encodeF32( self.position[1] ) )
         stream.writeFloat( vertexcodec.encodeF32( self.position[2] ) )
-        stream.writeUInt( vertexcodec.encodeX8Y8Z8W8( self.normal ) )
+        stream.writeUInt( vertexcodec.encodeX8Y8Z8W8( ( self.normal[0], self.normal[1], self.normal[2], self.occlusion ) ) )
         stream.writeUShort( vertexcodec.encodeF16( self.uvPrimary[0] ) )
         stream.writeUShort( vertexcodec.encodeF16( self.uvPrimary[1] ) )
 
@@ -347,7 +367,7 @@ class imVertexIANonSkinBL(imVertex):
         stream.writeFloat( vertexcodec.encodeF32( self.position[0] ) )
         stream.writeFloat( vertexcodec.encodeF32( self.position[1] ) )
         stream.writeFloat( vertexcodec.encodeF32( self.position[2] ) )
-        stream.writeUInt( vertexcodec.encodeX8Y8Z8W8( self.normal ) )
+        stream.writeUInt( vertexcodec.encodeX8Y8Z8W8( ( self.normal[0], self.normal[1], self.normal[2], self.occlusion ) ) )
         stream.writeUShort( vertexcodec.encodeF16( self.uvPrimary[0] ) )
         stream.writeUShort( vertexcodec.encodeF16( self.uvPrimary[1] ) )
         stream.writeUShort( vertexcodec.encodeF16( self.uvUnique[0] ) )
@@ -372,6 +392,136 @@ typedef struct {
  FSeek( p + 36 );
 } rVertexShaderInputLayout_IANonSkinTBNLA;
 '''
+
+class imVertexIANonSkinBC(imVertex):
+    # stride 24. Position f32, packed normal, one uv, then baked vertex colour + alpha.
+    STRIDE = 24
+    SHADER = 'IANonSkinBC'
+    MAX_WEIGHT_COUNT = 0
+    COMPRESSED = False
+
+    def __init__( self ):
+        super().__init__()
+
+    @staticmethod
+    def getFlags():
+        return 0x01
+
+    def write( self, stream ):
+        stream.writeFloat( vertexcodec.encodeF32( self.position[0] ) )
+        stream.writeFloat( vertexcodec.encodeF32( self.position[1] ) )
+        stream.writeFloat( vertexcodec.encodeF32( self.position[2] ) )
+<<<<<<< Updated upstream
+        stream.writeUInt( vertexcodec.encodeX8Y8Z8W8( self.normal ) )
+=======
+        stream.writeUInt( vertexcodec.encodeX8Y8Z8W8( ( self.normal[0], self.normal[1], self.normal[2], self.occlusion ) ) )
+>>>>>>> Stashed changes
+        stream.writeUShort( vertexcodec.encodeF16( self.uvPrimary[0] ) )
+        stream.writeUShort( vertexcodec.encodeF16( self.uvPrimary[1] ) )
+        stream.writeUByte( vertexcodec.encodeU8( self.color[0] ) )
+        stream.writeUByte( vertexcodec.encodeU8( self.color[1] ) )
+        stream.writeUByte( vertexcodec.encodeU8( self.color[2] ) )
+        stream.writeUByte( vertexcodec.encodeFU8( self.alpha ) )
+
+class imVertexIANonSkinBCA(imVertex):
+    # stride 28. As BC but with a second uv channel before the colour.
+    STRIDE = 28
+    SHADER = 'IANonSkinBCA'
+    MAX_WEIGHT_COUNT = 0
+    COMPRESSED = False
+
+    def __init__( self ):
+        super().__init__()
+
+    @staticmethod
+    def getFlags():
+        return 0x505
+
+    def write( self, stream ):
+        stream.writeFloat( vertexcodec.encodeF32( self.position[0] ) )
+        stream.writeFloat( vertexcodec.encodeF32( self.position[1] ) )
+        stream.writeFloat( vertexcodec.encodeF32( self.position[2] ) )
+<<<<<<< Updated upstream
+        stream.writeUInt( vertexcodec.encodeX8Y8Z8W8( self.normal ) )
+=======
+        stream.writeUInt( vertexcodec.encodeX8Y8Z8W8( ( self.normal[0], self.normal[1], self.normal[2], self.occlusion ) ) )
+>>>>>>> Stashed changes
+        stream.writeUShort( vertexcodec.encodeF16( self.uvPrimary[0] ) )
+        stream.writeUShort( vertexcodec.encodeF16( self.uvPrimary[1] ) )
+        stream.writeUShort( vertexcodec.encodeF16( self.uvExtend[0] ) )
+        stream.writeUShort( vertexcodec.encodeF16( self.uvExtend[1] ) )
+        stream.writeUByte( vertexcodec.encodeU8( self.color[0] ) )
+        stream.writeUByte( vertexcodec.encodeU8( self.color[1] ) )
+        stream.writeUByte( vertexcodec.encodeU8( self.color[2] ) )
+        stream.writeUByte( vertexcodec.encodeFU8( self.alpha ) )
+
+class imVertexIANonSkinBLA(imVertex):
+    # stride 28. Three uv channels, no tangent and no occlusion at all.
+    STRIDE = 28
+    SHADER = 'IANonSkinBLA'
+    MAX_WEIGHT_COUNT = 0
+    COMPRESSED = False
+
+    def __init__( self ):
+        super().__init__()
+
+    @staticmethod
+    def getFlags():
+        return 0x101
+
+    def write( self, stream ):
+        stream.writeFloat( vertexcodec.encodeF32( self.position[0] ) )
+        stream.writeFloat( vertexcodec.encodeF32( self.position[1] ) )
+        stream.writeFloat( vertexcodec.encodeF32( self.position[2] ) )
+<<<<<<< Updated upstream
+        stream.writeUInt( vertexcodec.encodeX8Y8Z8W8( self.normal ) )
+=======
+        stream.writeUInt( vertexcodec.encodeX8Y8Z8W8( ( self.normal[0], self.normal[1], self.normal[2], self.occlusion ) ) )
+>>>>>>> Stashed changes
+        stream.writeUShort( vertexcodec.encodeF16( self.uvPrimary[0] ) )
+        stream.writeUShort( vertexcodec.encodeF16( self.uvPrimary[1] ) )
+        stream.writeUShort( vertexcodec.encodeF16( self.uvExtend[0] ) )
+        stream.writeUShort( vertexcodec.encodeF16( self.uvExtend[1] ) )
+        stream.writeUShort( vertexcodec.encodeF16( self.uvUnique[0] ) )
+        stream.writeUShort( vertexcodec.encodeF16( self.uvUnique[1] ) )
+
+class imVertexIANonSkinTBNL(imVertex):
+    # stride 36. Nearly identical to TBNLA but the byte at +15 is vertex alpha rather
+    # than occlusion, occlusion moves to +32, and there are only three uv channels.
+    STRIDE = 36
+    SHADER = 'IANonSkinTBNL'
+    MAX_WEIGHT_COUNT = 0
+    COMPRESSED = False
+
+    def __init__( self ):
+        super().__init__()
+
+    @staticmethod
+    def getFlags():
+        return 0x01
+
+    def write( self, stream ):
+        stream.writeFloat( vertexcodec.encodeF32( self.position[0] ) )
+        stream.writeFloat( vertexcodec.encodeF32( self.position[1] ) )
+        stream.writeFloat( vertexcodec.encodeF32( self.position[2] ) )
+        stream.writeUByte( vertexcodec.encodeFS8( self.normal[0] ) )
+        stream.writeUByte( vertexcodec.encodeFS8( self.normal[1] ) )
+        stream.writeUByte( vertexcodec.encodeFS8( self.normal[2] ) )
+        stream.writeUByte( vertexcodec.encodeFU8( self.alpha ) )
+        stream.writeUByte( vertexcodec.encodeFS8( self.tangent[0] ) )
+        stream.writeUByte( vertexcodec.encodeFS8( self.tangent[1] ) )
+        stream.writeUByte( vertexcodec.encodeFS8( self.tangent[2] ) )
+        stream.writeUByte( vertexcodec.encodeFS8( self.tangent[3] ) )
+        stream.writeUShort( vertexcodec.encodeF16( self.uvPrimary[0] ) )
+        stream.writeUShort( vertexcodec.encodeF16( self.uvPrimary[1] ) )
+        stream.writeUShort( vertexcodec.encodeF16( self.uvSecondary[0] ) )
+        stream.writeUShort( vertexcodec.encodeF16( self.uvSecondary[1] ) )
+        stream.writeUShort( vertexcodec.encodeF16( self.uvUnique[0] ) )
+        stream.writeUShort( vertexcodec.encodeF16( self.uvUnique[1] ) )
+        stream.writeUByte( vertexcodec.encodeFU8( self.occlusion ) )
+        stream.writeUByte( 0 )
+        stream.writeUByte( 0 )
+        stream.writeUByte( 0 )
 
 class imVertexIANonSkinTBNLA(imVertex):
     STRIDE = 36
@@ -455,7 +605,7 @@ class imVertexIASkinBridge1wt(imVertex):
         # for 1 weight formats, so reading the array wrote a hardcoded 0 and every
         # vertex using this format ended up rigged to the root.
         stream.writeShort( vertexcodec.encodeS16( self.jointId ) )
-        stream.writeUInt( vertexcodec.encodeX8Y8Z8W8( self.normal ) )
+        stream.writeUInt( vertexcodec.encodeX8Y8Z8W8( ( self.normal[0], self.normal[1], self.normal[2], self.occlusion ) ) )
 
 '''
 /* size = 16 */
@@ -486,7 +636,7 @@ class imVertexIASkinBridge2wt(imVertex):
         stream.writeUShort( vertexcodec.encodeFS16( self.position[1] ) )
         stream.writeUShort( vertexcodec.encodeFS16( self.position[2] ) )
         stream.writeUShort( vertexcodec.encodeFS16( self.weights[0] ) )
-        stream.writeUInt( vertexcodec.encodeX8Y8Z8W8( self.normal ) )
+        stream.writeUInt( vertexcodec.encodeX8Y8Z8W8( ( self.normal[0], self.normal[1], self.normal[2], self.occlusion ) ) )
         stream.writeShort( vertexcodec.encodeS16( self.jointIds[0] ) )
         stream.writeShort( vertexcodec.encodeS16( self.jointIds[1] ) )
 
@@ -527,7 +677,7 @@ class imVertexIASkinBridge4wt(imVertex):
         stream.writeUByte( vertexcodec.encodeFU8( self.weights[1] ) )
         stream.writeUByte( vertexcodec.encodeFU8( self.weights[2] ) )
         stream.writeUByte( vertexcodec.encodeFU8( self.weights[3] ) )
-        stream.writeUInt( vertexcodec.encodeX8Y8Z8W8( self.normal ) )
+        stream.writeUInt( vertexcodec.encodeX8Y8Z8W8( ( self.normal[0], self.normal[1], self.normal[2], self.occlusion ) ) )
 
 '''
 /* size = 28 */
@@ -559,6 +709,10 @@ class imVertexFormat(object):
         elif shader == imVertexIANonSkinTB.SHADER: return imVertexFormat( imVertexIANonSkinTB )
         elif shader == imVertexIANonSkinB.SHADER: return imVertexFormat( imVertexIANonSkinB )
         elif shader == imVertexIANonSkinBL.SHADER: return imVertexFormat( imVertexIANonSkinBL )
+        elif shader == imVertexIANonSkinBC.SHADER: return imVertexFormat( imVertexIANonSkinBC )
+        elif shader == imVertexIANonSkinBCA.SHADER: return imVertexFormat( imVertexIANonSkinBCA )
+        elif shader == imVertexIANonSkinBLA.SHADER: return imVertexFormat( imVertexIANonSkinBLA )
+        elif shader == imVertexIANonSkinTBNL.SHADER: return imVertexFormat( imVertexIANonSkinTBNL )
         elif shader == imVertexIANonSkinTBNLA.SHADER: return imVertexFormat( imVertexIANonSkinTBNLA )
         else: return None
         
@@ -618,8 +772,13 @@ class imPrimitive(object):
     def __init__( self, name, materialName, flags=0xFFFF, group=None, 
             lodIndex=0xFF, vertexFlags=None, vertexStride=None, renderFlags=67, 
             vertexShader=None, id=None, field2c=0, 
-            positions=None, tangents=None, normals=None, uvPrimary=None, uvSecondary=None, uvUnique=None, uvExtend=None, weights=None, indices=None, 
+            positions=None, tangents=None, normals=None, uvPrimary=None, uvSecondary=None, uvUnique=None, uvExtend=None, weights=None, indices=None,
+            colors=None, 
+<<<<<<< Updated upstream
             envelopes=None, index=sys.maxsize ):
+=======
+            envelopes=None, index=sys.maxsize, occlusions=None ):
+>>>>>>> Stashed changes
         self.name = name
         self.materialName = materialName
         self.flags = flags
@@ -636,6 +795,12 @@ class imPrimitive(object):
         self.uvUnique = uvUnique if uvUnique != None else []
         self.uvExtend = uvExtend if uvExtend != None else []
         self.weights = weights if weights != None else []
+        self.colors = colors if colors != None else []
+<<<<<<< Updated upstream
+=======
+        # per vertex occlusion (blender attribute 'mt_ao_darken' = 1 - occlusion), 1 when absent
+        self.occlusions = occlusions if occlusions != None else []
+>>>>>>> Stashed changes
         self.indices = indices if indices != None else []
         self.vertexFormat = imVertexFormat( vertexShader )
         self.envelopes = envelopes if envelopes != None else []
@@ -740,6 +905,11 @@ class imPrimitive(object):
         uvUnique = self.uvUnique
         uvExtend = self.uvExtend
         weights = self.weights
+        colors = self.colors
+<<<<<<< Updated upstream
+=======
+        occlusions = self.occlusions
+>>>>>>> Stashed changes
         tangents = self.tangents
         isSkinned = self.isSkinned()
         hasUvs = self.hasUvs()
@@ -752,6 +922,11 @@ class imPrimitive(object):
         self.uvUnique = []
         self.uvExtend = []
         self.weights = []
+        self.colors = []
+<<<<<<< Updated upstream
+=======
+        self.occlusions = []
+>>>>>>> Stashed changes
         self.tangents = []
         self.indices = []
         
@@ -777,6 +952,16 @@ class imPrimitive(object):
                 cv.weights = tuple(weights[i].weights)
                 cv.weightIndices = tuple(weights[i].indices)
 
+            if colors != None and len(colors) > i:
+                cv.color = tuple(colors[i][:3])
+                cv.alpha = colors[i][3]
+
+<<<<<<< Updated upstream
+=======
+            if occlusions != None and len(occlusions) > i:
+                cv.occlusion = float(occlusions[i])
+
+>>>>>>> Stashed changes
             if cv not in vertexIdxLookup:
                 idx = nextVertexIdx
                 nextVertexIdx += 1
@@ -792,6 +977,15 @@ class imPrimitive(object):
                     if cv.uvExtend != None: self.uvExtend.append( NclVec2( cv.uvExtend ) )
                     if cv.tangent != None: self.tangents.append( NclVec4( cv.tangent ) )
                 
+                if cv.color != ():
+                    self.colors.append( ( cv.color[0], cv.color[1], cv.color[2], cv.alpha ) )
+
+<<<<<<< Updated upstream
+=======
+                if cv.occlusion != ():
+                    self.occlusions.append( cv.occlusion )
+
+>>>>>>> Stashed changes
                 if isSkinned:
                     vtxWeight = imVertexWeight()
                     vtxWeight.indices = cv.weightIndices
@@ -1190,7 +1384,18 @@ class imModel:
                 vtx: imVertex = mesh.vertexFormat.vertexType()                
                 vtx.position = mesh.positions[i]
                 vtx.normal = mesh.normals[i]  
+<<<<<<< Updated upstream
                 vtx.occlusion = 1
+=======
+                # retail models bake ambient occlusion here and the shaders multiply the
+                # lit diffuse by it. Write back what was imported, 1 when there's none.
+                vtx.occlusion = mesh.occlusions[i] if mesh.occlusions is not None and len( mesh.occlusions ) > i else 1
+>>>>>>> Stashed changes
+
+                if mesh.colors is not None and len( mesh.colors ) > i:
+                    c = mesh.colors[i]
+                    vtx.color = NclVec3(( c[0]*255.0, c[1]*255.0, c[2]*255.0 ))
+                    vtx.alpha = c[3]
                 
                 if mesh.hasUvs():
                     vtx.tangent = mesh.tangents[i]  
@@ -1278,7 +1483,7 @@ class imModel:
             prim.envelopeCount = len(mesh.envelopes)
             prim.id = meshIndex + 1 if mesh.id is None else mesh.id # ids start with 1
             prim.minVertexIndex = 0
-            prim.maxVertexIndex = prim.minVertexIndex + prim.vertexCount
+            prim.maxVertexIndex = prim.minVertexIndex + prim.vertexCount - 1
             prim.field2c = 0
             prim.envelopePtr = 0
             mod.primitives.append( prim )

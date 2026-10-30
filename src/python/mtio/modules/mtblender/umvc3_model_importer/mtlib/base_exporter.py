@@ -63,6 +63,7 @@ class PrimitiveCustomAttributeData:
 @dataclass(frozen=False,init=False)
 class MaterialCustomAttributeData:
     type: str
+    blendState: str
     depthStencilState: str
     rasterizerState: str
     cmdListFlags: int
@@ -268,6 +269,7 @@ class ModelExporterBase(ABC):
         # Read back the MT material state the importer stashed on the editor material.
         data = MaterialCustomAttributeData()
         data.type = None
+        data.blendState = None
         data.depthStencilState = None
         data.rasterizerState = None
         data.cmdListFlags = None
@@ -276,6 +278,7 @@ class ModelExporterBase(ABC):
         attribs = self.getEditorMaterialCustomAttributeData( material )
         if attribs != None:
             data.type = attribs.type
+            data.blendState = attribs.blendState
             data.depthStencilState = attribs.depthStencilState
             data.rasterizerState = attribs.rasterizerState
             data.cmdListFlags = _tryParseInt(attribs.cmdListFlags, base=0)
@@ -287,6 +290,7 @@ class ModelExporterBase(ABC):
         if materialInstance == None or data == None:
             return materialInstance
         if data.type != None: materialInstance.type = data.type
+        if data.blendState != None: materialInstance.blendState = data.blendState
         if data.depthStencilState != None: materialInstance.depthStencilState = data.depthStencilState
         if data.rasterizerState != None: materialInstance.rasterizerState = data.rasterizerState
         if data.cmdListFlags != None: materialInstance.cmdListFlags = data.cmdListFlags
@@ -657,21 +661,19 @@ class ModelExporterBase(ABC):
             return material.getName()
             
     def iterMeshNodes( self ):
+
         #Tweaked to only care about meshes in the same collection as the selected Armature.
         ChosenArmature = bpy.context.view_layer.objects.active
         armatureCollections = set(ChosenArmature.users_collection)
-
         for editorNode in self.getObjects():
             if not self.shouldExportNode( editorNode ):
                 continue
             
             if not editorNode.isMeshNode() and not editorNode.isSplineNode():
                 continue
-
             MeshNode = editorNode.node
             if not armatureCollections.intersection(MeshNode.users_collection):
                 continue
-
             yield editorNode
 
     def generatePrimitives( self, editorNode: EditorNodeProxy, attribs: PrimitiveCustomAttributeData, 
@@ -768,7 +770,7 @@ class ModelExporterBase(ABC):
                 index=index,
             )
         except Exception as e:
-            self.logger.warning( 'could not rebuild a stored envelope: ' + str(e) )
+            self.logger.warn( 'could not rebuild a stored envelope: ' + str(e) )
             return None
 
     def processMeshes( self, mip ):
@@ -893,19 +895,21 @@ class ModelExporterBase(ABC):
             mrlExportPath = self.outPath.basePath + '/' + self.outPath.baseName + '.mrl'
             
         self.updateProgress( 'Writing files', 50 )
-        if self.config.exportGenerateMrl:
-            mrlYmlExportPath = mrlExportPath + ".yml"
-            self.logger.info(f"writing generated mrl yml to {mrlYmlExportPath}")
-            self.mrl.updateTextureList()
-            try:
-                self.mrl.saveYamlFile( mrlYmlExportPath )
-            except PermissionError as e:
-                raise RuntimeError( f"Unable to save mrl yml file, make sure you have write permissions to {mrlYmlExportPath}" )
+        # DEPRECATED: mrl generation
+        # if self.config.exportGenerateMrl:
+        #     mrlYmlExportPath = mrlExportPath + ".yml"
+        #     self.logger.info(f"writing generated mrl yml to {mrlYmlExportPath}")
+        #     self.mrl.updateTextureList()
+        #     try:
+        #         self.mrl.saveYamlFile( mrlYmlExportPath )
+        #     except PermissionError as e:
+        #         raise RuntimeError( f"Unable to save mrl yml file, make sure you have write permissions to {mrlYmlExportPath}" )
           
         self.updateProgress( 'Writing files', 75 )  
-        if self.config.exportGenerateMrl or (self.config.exportExistingMrlYml and self.mrl != None):
-            self.logger.info(f'exporting mrl yml to {mrlExportPath}')
-            
+        # Kept for the existing-yml path. The generation half of the old condition
+        # is gone, so this only fires when the user supplied an mrl yml.
+        if self.config.exportExistingMrlYml and self.mrl != None:
+            self.logger.info(f'exporting mrl to {mrlExportPath}')
             try:
                 self.mrl.saveBinaryFile( mrlExportPath )
             except PermissionError as e:
@@ -939,12 +943,16 @@ class ModelExporterBase(ABC):
         else:
             self.ref = None
         self.path = mip.export_modelpath
-        self.rootpath = mip.extracted_archive_directory
-        self.outPath = util.ResourcePath(path, rootPath=mip.extracted_archive_directory)
-        if self.outPath.relBasePath == None:
-            raise RuntimeError(
-"The model export path is not in a subfolder of the specified extracted archive directory.\n"+
-"If your extracted archive directory is C:\\Export, the model export path should start with C:\\Export.")
+        # DEPRECATED: extracted archive directory. Its only consumer was the mrl
+        # texture path prefix, and the raise below blocked exports over a value
+        # nothing reads. outPath only needs rootPath to populate relBasePath.
+        # self.rootpath = mip.extracted_archive_directory
+        self.rootpath = ''
+        self.outPath = util.ResourcePath(path)
+        # if self.outPath.relBasePath == None:
+        #     raise RuntimeError(
+        # "The model export path is not in a subfolder of the specified extracted archive directory.\n"+
+        # "If your extracted archive directory is C:\\Export, the model export path should start with C:\\Export.")
         
         self.metadata = ModelMetadata()
         self.mrl = None
@@ -963,19 +971,25 @@ class ModelExporterBase(ABC):
             self.ref = rModelData()
             self.ref.read( NclBitStream( util.loadIntoByteArray( mip.export_reference_model_file ) ) )
             
-        if os.path.exists( mip.existing_mrl_yml ):
+        # Loading an existing mrl yml is kept. It is a straight yml to binary mrl
+        # conversion, independent of generation and of the extracted archive path.
+        if mip.existing_mrl_yml != '' and os.path.exists( mip.existing_mrl_yml ):
             self.logger.info(f'loading mrl yml from {mip.existing_mrl_yml}')
             self.mrl = imMaterialLib()
             self.mrl.loadYamlFile( mip.existing_mrl_yml )
-        elif self.config.exportGenerateMrl:
-            self.logger.info(f'generating new mrl')
-            self.mrl = imMaterialLib()
+        # DEPRECATED: mrl generation from the blender scene
+        # elif self.config.exportGenerateMrl:
+        #     self.logger.info(f'generating new mrl')
+        #     self.mrl = imMaterialLib()
             
         self.logger.debug('creating output directories')
-        if not os.path.exists( mip.extracted_archive_directory ):
-            os.makedirs( mip.extracted_archive_directory )
+        # DEPRECATED: don't create the extracted archive directory, that's the folder
+        # the user extracted the game into. The second call was also wrong, it made a
+        # directory named after the .mod file rather than its parent.
+        # if not os.path.exists( mip.extracted_archive_directory ):
+        #     os.makedirs( mip.extracted_archive_directory )
         if not os.path.exists( os.path.dirname( mip.export_modelpath ) ):
-            os.makedirs( mip.export_modelpath )
+            os.makedirs( os.path.dirname( mip.export_modelpath ) )
 
 
         self.logger.info('processing scene')
